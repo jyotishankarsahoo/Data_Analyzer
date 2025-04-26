@@ -9,11 +9,6 @@ st.set_page_config(page_title= "Data Exploration Tool",
                    page_icon= "",
                    initial_sidebar_state= "collapsed",
                    layout="wide")
-plt.rcParams['font.sans-serif'] = ['SimHei']  # Or another suitable font
-plt.rcParams['axes.unicode_minus'] = False
-
-st.title("Interactive Data Analyzer")
-uploaded_file = st.file_uploader(label= "Upload your CSV file", type=["csv"])
 
 def convert_df_to_csv(data_frame):
     return data_frame.to_csv(index=False).encode('utf-8')
@@ -297,162 +292,17 @@ def main():
     df = load_data()
     if df is not None:
         st.session_state.df = df.copy()  # Store the original DataFrame
+        st.markdown("---")
         display_data_preview(st.session_state.df)
+        st.markdown("---")
         display_data_info(st.session_state.df)
+        st.markdown("---")
         display_descriptive_info(st.session_state.df)
+        st.markdown("---")
         display_data_cleaning(st.session_state.df)
+        st.markdown("---")
         display_visualizations(st.session_state.df)
-if uploaded_file:
-    try:
-        df = pd.read_csv(uploaded_file)
-    except pd.errors.EmptyDataError:
-        st.error("Uploaded file is empty")
-        st.stop()
-    st.header("Uploaded Data")
-    st.dataframe(df.head())
-
-    st.subheader("Data Information")
-    data_info = pd.DataFrame({"Columns": df.columns, "Data Type": df.dtypes})
-    st.dataframe(data_info)
-    st.markdown(f"- **Number of rows**: `{df.shape[0]}`")
-    st.markdown(f"- **Number of columns**: `{df.shape[1]}`")
-
-    if not df.empty:
-        col_num_stats, col_cat_stats = st.columns(2)
-        with col_num_stats:
-            st.subheader("Numerical Statistics")
-            numerical_columns = df.select_dtypes(include=["number"])
-            st.dataframe(numerical_columns.describe().T)
-        with col_cat_stats:
-            st.subheader("Categorical Statistics")
-            categorical_columns = df.select_dtypes(include=["object", "category"])
-            st.dataframe(categorical_columns.describe().T)
         st.markdown("---")
-
-        col_missing_value_analysis, col_duplicate_value_analysis = st.columns([1, 1])
-        with col_missing_value_analysis:
-            st.subheader("Missing Value Analysis")
-            missing_value = df.isnull().sum()
-            if missing_value.sum() > 0:
-                missing_value_gt_0 = missing_value[missing_value > 0]
-                missing_value_df = pd.DataFrame(
-                    {
-                        "Total Missing": missing_value_gt_0,
-                        "Percent Missing": (missing_value_gt_0 / df.shape[0]) * 100
-                    }).sort_values(by="Total Missing", ascending=False)
-                st.dataframe(missing_value_df)
-                handle_missing = st.selectbox(
-                    "What would you like to do with the missing values?",
-                    ["Do Nothing", "Remove Rows with Missing Values", "Fill Missing Values"]
-                )
-            else:
-                st.info("No missing Values found in DataFrame")
-        with col_duplicate_value_analysis:
-            st.subheader("Duplicate Value Analysis")
-
-            duplicate_values = df.duplicated().sum()
-            if duplicate_values > 0:
-                st.info(f"Found {duplicate_values} duplicate rows.")
-                with st.expander("View Duplicate Rows"):
-                    st.dataframe(df[df.duplicated(keep="first")])
-
-                if st.checkbox("Remove Duplicate Rows"):
-                    df_no_duplicates = df.drop_duplicates(keep="first").reset_index(drop=True)
-                    st.success(f"Removed {duplicate_values} duplicate rows from Dataframe")
-                    st.dataframe(df_no_duplicates)
-
-                    st.subheader("Download Processed Data")
-                    download_filename = st.text_input("Enter the desired filename (without extension):",
-                                                      "processed_data_no_duplicates")
-                    csv_file = convert_df_to_csv(df_no_duplicates)
-                    st.download_button(
-                        label="Download as CSV",
-                        data=csv_file,
-                        file_name=f"{download_filename}.csv",
-                        mime="text/csv",
-                    )
-            else:
-                st.info("No duplicate rows found in the dataframe")
-        st.markdown("---")
-
-        st.subheader("Unique Values in Categorical Columns")
-        categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-        if not categorical_cols:
-            st.info("No categorical columns found in the DataFrame.")
-        else:
-            selected_column = st.selectbox("Choose a column:", categorical_cols)
-            if selected_column:
-                unique_values = df[selected_column].unique()
-                num_unique = df[selected_column].nunique()
-                st.info(f"There are {num_unique} unique values")
-                with st.expander("Show Unique Values"):
-                    st.dataframe(df[selected_column].value_counts())
-        st.markdown("---")
-        st.subheader("Data Visualization")
-        num_column, cat_column = st.columns(2)
-        with num_column:
-            numerical_columns = df.select_dtypes(include=np.number).columns.tolist()
-            if numerical_columns:
-                st.subheader("Histogram")
-                selected_column_list = st.selectbox("Select a numerical column for histogram",
-                                                numerical_columns)
-                include_kde = st.checkbox("Apply Kernel Density Estimate (KDE)")
-                fig_hist, ax_hist = plt.subplots()
-                sns.histplot(data=df, x=selected_column_list, kde=include_kde,ax=ax_hist)
-                plt.tight_layout()
-                st.pyplot(fig_hist)
-
-                st.subheader("Box Plot")
-                selected_column_list = st.selectbox("Select a numerical column for Box Plot",
-                                                    numerical_columns)
-                select_show_fliers = st.checkbox("Hide Outliers")
-                fig_box, ax_box = plt.subplots()
-                sns.boxplot(data=df, x=selected_column_list, showfliers=not select_show_fliers, ax=ax_box)
-                plt.tight_layout()
-                st.pyplot(fig_box)
-            else:
-                st.info("No numerical columns found for histogram")
-        with cat_column:
-            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-            if categorical_cols:
-                st.subheader("Bar Chart")
-                selected_column_list = st.selectbox("Select a Categorical column for Bar Plot",
-                                                categorical_cols)
-                fig_count, ax_count = plt.subplots()
-                sns.countplot(data=df, x =selected_column_list,ax=ax_count)
-                plt.xticks(rotation=45, ha='right')
-                plt.tight_layout()
-                st.pyplot(fig_count)
-            else:
-                st.info("No categorical columns found for bar chart.")
-
-        st.markdown("---")
-        st.subheader("Correlation Heatmap of Numerical Columns")
-        numerical_columns = df.select_dtypes(include=np.number)
-        fig, ax = plt.subplots(figsize=(6, 3))
-        sns.heatmap(data=numerical_columns.corr(), annot=True, cmap="Spectral", ax= ax)
-        st.pyplot(fig)
-
-        st.markdown("---")
-        st.subheader("Box Plot For Outlier Check")
-        numerical_columns = df.select_dtypes(include=np.number).columns.tolist()
-
-        fig = plt.figure(figsize=(15, 12))
-
-        # Determine the number of subplots needed
-        num_cols = len(numerical_columns)
-        num_rows = (num_cols + 3) // 4  # Ensure enough rows for all subplots (ceiling division)
-
-        for i, col in enumerate(numerical_columns):
-            plt.subplot(num_rows, 4, i + 1)
-            sns.boxplot(data=df, x=col, showfliers=False)
-            # plt.title(col)
-            plt.tight_layout()
-
-        # Display the Matplotlib figure in Streamlit
-        st.pyplot(fig)
-
-
 
 if __name__ == "__main__":
     main()
