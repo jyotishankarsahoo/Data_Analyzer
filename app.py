@@ -227,7 +227,7 @@ def display_data_cleaning(df: DataFrame):
         target_dtype = st.selectbox("Select the target data type:", available_dtypes, index=available_dtypes.index(str(original_dtype)))
         if st.button("Convert Data Type"):
             try:
-                df[selected_column] = df[selected_column].astype(target_dtypes)
+                df[selected_column] = df[selected_column].astype(target_dtype)
                 st.success(f"Column '{selected_column}' converted from '{original_dtype}' to '{target_dtype}'.")
                 st.session_state.df = df
                 with st.expander("Updated Data Preview (after data type conversion)"):
@@ -243,7 +243,7 @@ def display_visualizations(df: DataFrame):
 
     with tab1:
         st.subheader("Distribution of Single Variables")
-        numerical_columns = df.select_dtypes(include=np.number).columns
+        numerical_columns = df.select_dtypes(include=["number", "datetime64[ns]"]).columns
         categorical_columns = df.select_dtypes(include=['object', 'category']).columns
         col1, col2 = st.columns(2)
         with col1:
