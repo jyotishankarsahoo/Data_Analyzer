@@ -51,6 +51,11 @@ def display_data_preview(df: DataFrame):
     st.subheader("Data Preview")
     st.dataframe(df.head())
 
+def display_interactive_dataframe(df: DataFrame):
+    st.subheader("Interactive Data Exploration")
+    edited_df = st.data_editor(df, num_rows= "dynamic")
+    return edited_df
+
 def display_data_info(df: DataFrame):
     """Displays basic information about the DataFrame."""
     st.subheader("Data Information")
@@ -73,9 +78,11 @@ def display_descriptive_info(df: DataFrame):
 def display_data_cleaning(df: DataFrame):
     """Displays and handles inconsistent formatting, non-numeric values, missing values, and duplicate rows using tabs."""
     st.subheader("Data Cleaning")
-    formatting_tab, missing_value_tab, duplicate_rows_tab = st.tabs(["Handle Formatting",
-                                                                                      "Handle Missing Values",
-                                                                                      "Handle Duplicate Rows"])
+    formatting_tab, missing_value_tab, duplicate_rows_tab, drop_column_tab, convert_data_type_tab = st.tabs(["Handle Formatting",
+                                                                                                             "Handle Missing Values",
+                                                                                                             "Handle Duplicate Rows",
+                                                                                                             "Drop Columns",
+                                                                                                             "Convert Data Type"])
     with formatting_tab:
         st.subheader("White Space Handling")
         string_cols = df.select_dtypes(include=["object", "category"]).columns
@@ -111,26 +118,6 @@ def display_data_cleaning(df: DataFrame):
 
         else:
             st.info("No string columns found for case conversion.")
-
-
-    # with non_numeric_tab:
-    #     st.subheader("Non Numeric Data Handling")
-    #     non_numeric_values = {}
-    #     cols_to_check = df.select_dtypes(include=['number', 'object']).columns
-    #     for col in cols_to_check:
-    #         # Attempt to convert to numeric, coercing errors to NaN
-    #         numeric_converted = pd.to_numeric(df[col], errors='coerce')
-    #         # Identify rows where conversion failed but the original value was not already NaN
-    #         non_numeric_mask = numeric_converted.isna() & df[col].notna()
-    #         non_numeric_series = df[col][non_numeric_mask]  # Select the original column using the mask
-    #         if not non_numeric_series.empty:
-    #             unique_non_numeric = non_numeric_series.unique().tolist()
-    #             non_numeric_values[col] = unique_non_numeric
-    #
-    #     if non_numeric_values:
-    #         st.warning("Potential non-numeric values found in columns:")
-    #         for col, values in non_numeric_values.items():
-    #             st.write(f"- Column '{col}': {values}")
 
     with missing_value_tab:
         st.subheader("Missing Value Handling")
@@ -220,71 +207,113 @@ def display_data_cleaning(df: DataFrame):
         else:
             st.info("No duplicate rows found in the dataset.")
 
+    with drop_column_tab:
+        st.subheader("Drop Columns")
+        columns_to_drop = st.multiselect("Select columns to drop:", df.columns)
+        if st.button("Drop selected Column"):
+            if columns_to_drop:
+                df.drop(columns=columns_to_drop, inplace=True)
+                st.success(f"Dropped columns: {', '.join(columns_to_drop)}")
+                st.session_state.df = df
+                with st.expander("Updated Data Preview (after dropping columns)"):
+                    st.dataframe(df.head())
+            else:
+                st.warning("Please select columns to drop.")
+
+    with convert_data_type_tab:
+        selected_column = st.selectbox("Select a column to convert:", df.columns)
+        original_dtype = df[selected_column].dtype
+        available_dtypes = ["int64", 'float64', "object", "datetime64[ns]", "bool"]
+        target_dtype = st.selectbox("Select the target data type:", available_dtypes, index=available_dtypes.index(str(original_dtype)))
+        if st.button("Convert Data Type"):
+            try:
+                df[selected_column] = df[selected_column].astype(target_dtypes)
+                st.success(f"Column '{selected_column}' converted from '{original_dtype}' to '{target_dtype}'.")
+                st.session_state.df = df
+                with st.expander("Updated Data Preview (after data type conversion)"):
+                    st.dataframe(df.head())
+            except Exception as e:
+                st.error(f"Error converting column '{selected_column}' to '{target_dtype}': {e}")
+
+
 def display_visualizations(df: DataFrame):
-    st.subheader("Data Visualization and Insights")
-    st.subheader("Uni-variate Analysis")
-    numerical_columns = df.select_dtypes(include=np.number).columns
-    categorical_columns = df.select_dtypes(include=['object', 'category']).columns
-    col1, col2 = st.columns(2)
-    with col1:
-        if not numerical_columns.empty:
-            st.subheader("Numerical Columns")
-            selected_numerical_column = st.selectbox("Select a numerical column for uni-variate analysis", numerical_columns)
-            if selected_numerical_column:
-                data = df[selected_numerical_column].dropna()
-                st.write(f"**Distribution Analysis for `{selected_numerical_column}`:**")
-                plot_type = st.selectbox("Select Plot Type",
-                                       ["Histogram", "Box Plot", "Violin Plot"])
-                if plot_type == "Histogram":
-                    show_kde = st.checkbox("Show KDE", False)
-                    fig, ax = plt.subplots()
-                    sns.histplot(df, x=selected_numerical_column, kde=show_kde, ax = ax)
-                    st.pyplot(fig)
-                    st.write(f"**Insights:** The distribution of '{selected_numerical_column}' shows its frequency across different ranges. The KDE line provides an estimate of the probability density function.")
-                elif plot_type == "Box Plot":
-                    hide_fliers = st.checkbox("Hide Outliers", True)
-                    fig, ax = plt.subplots()
-                    sns.boxplot(df, x=selected_numerical_column, showfliers= hide_fliers ,ax = ax)
-                    st.pyplot(fig)
-                elif plot_type == "Violin Plot":
-                    fig, ax = plt.subplots()
-                    sns.violinplot(df, x=selected_numerical_column, ax = ax)
-                    st.pyplot(fig)
-        else:
-            st.warning("No numerical columns available for univariate analysis.")
-    with col2:
-        if categorical_columns.any():
-            st.subheader("Categorical Columns")
-            selected_categorical_column_uni = st.selectbox("Select a categorical column for univariate analysis:",
-                                                       categorical_columns)
-            if selected_categorical_column_uni:
-                unique_value_count = df[selected_categorical_column_uni].nunique()
-                if unique_value_count > 10:
-                    max_slider_value = unique_value_count
-                    min_slider_value = 10
-                    default_slider_value = min(15, max_slider_value)
-                    top_n = st.slider("Number of top categories to display:",
-                                      min_value=min_slider_value,
-                                      max_value=max_slider_value,
-                                      value=default_slider_value)
-                    if max_slider_value > 50:
-                        st.warning(
-                            f"The column '{selected_categorical_column_uni}' has a very large number of unique values ({max_slider_value}). Consider using a higher 'Number of top categories to display' or other methods to visualize the distribution effectively.")
-                else:
-                    top_n = unique_value_count  # Display all if unique count is 10 or less
-                top_categories = df[selected_categorical_column_uni].value_counts().nlargest(top_n)
+    st.subheader("Data Visualization")
 
-                fig, ax = plt.subplots(figsize=(10, 6))  # Adjust figure size for better readability
-                sns.countplot(df, x=selected_categorical_column_uni , order=top_categories.index, ax=ax)
-                plt.xticks(rotation=90)
-                st.pyplot(fig)
+    tab1, tab2, tab3 = st.tabs(["Uni-variate Analysis", "Bi-variate Analysis", "Multi-variate Analysis"])
 
-                st.write("**Categorical Column Frequencies**")
-                frequency_df = df[selected_categorical_column_uni].value_counts().reset_index()
-                frequency_df.columns = ["Category", "Frequency"]
-                st.dataframe(frequency_df.sort_values(by='Frequency', ascending=False))
-        else:
-            st.info("No categorical columns available for univariate analysis.")
+    with tab1:
+        st.subheader("Distribution of Single Variables")
+        numerical_columns = df.select_dtypes(include=np.number).columns
+        categorical_columns = df.select_dtypes(include=['object', 'category']).columns
+        col1, col2 = st.columns(2)
+        with col1:
+            if not numerical_columns.empty:
+                st.subheader("Numerical Columns")
+                selected_numerical_column = st.selectbox("Select a numerical column for uni-variate analysis",
+                                                         numerical_columns)
+                if selected_numerical_column:
+                    data = df[selected_numerical_column].dropna()
+                    st.write(f"**Distribution Analysis for `{selected_numerical_column}`:**")
+                    plot_type = st.selectbox("Select Plot Type",
+                                             ["Histogram", "Box Plot", "Violin Plot"])
+                    if plot_type == "Histogram":
+                        show_kde = st.checkbox("Show KDE", False)
+                        fig, ax = plt.subplots()
+                        sns.histplot(df, x=selected_numerical_column, kde=show_kde, ax=ax)
+                        st.pyplot(fig)
+                        st.write(
+                            f"**Insights:** The distribution of '{selected_numerical_column}' shows its frequency across different ranges. The KDE line provides an estimate of the probability density function.")
+                    elif plot_type == "Box Plot":
+                        hide_fliers = st.checkbox("Hide Outliers", True)
+                        fig, ax = plt.subplots()
+                        sns.boxplot(df, x=selected_numerical_column, showfliers=hide_fliers, ax=ax)
+                        st.pyplot(fig)
+                    elif plot_type == "Violin Plot":
+                        fig, ax = plt.subplots()
+                        sns.violinplot(df, x=selected_numerical_column, ax=ax)
+                        st.pyplot(fig)
+            else:
+                st.warning("No numerical columns available for univariate analysis.")
+        with col2:
+            if categorical_columns.any():
+                st.subheader("Categorical Columns")
+                selected_categorical_column_uni = st.selectbox("Select a categorical column for univariate analysis:",
+                                                               categorical_columns)
+                if selected_categorical_column_uni:
+                    unique_value_count = df[selected_categorical_column_uni].nunique()
+                    if unique_value_count > 10:
+                        max_slider_value = unique_value_count
+                        min_slider_value = 10
+                        default_slider_value = min(15, max_slider_value)
+                        top_n = st.slider("Number of top categories to display:",
+                                          min_value=min_slider_value,
+                                          max_value=max_slider_value,
+                                          value=default_slider_value)
+                        if max_slider_value > 50:
+                            st.warning(
+                                f"The column '{selected_categorical_column_uni}' has a very large number of unique values ({max_slider_value}). Consider using a higher 'Number of top categories to display' or other methods to visualize the distribution effectively.")
+                    else:
+                        top_n = unique_value_count  # Display all if unique count is 10 or less
+                    top_categories = df[selected_categorical_column_uni].value_counts().nlargest(top_n)
+
+                    fig, ax = plt.subplots(figsize=(10, 6))  # Adjust figure size for better readability
+                    sns.countplot(df, x=selected_categorical_column_uni, order=top_categories.index, ax=ax)
+                    plt.xticks(rotation=90)
+                    st.pyplot(fig)
+
+                    st.write("**Categorical Column Frequencies**")
+                    frequency_df = df[selected_categorical_column_uni].value_counts().reset_index()
+                    frequency_df.columns = ["Category", "Frequency"]
+                    st.dataframe(frequency_df.sort_values(by='Frequency', ascending=False))
+            else:
+                st.info("No categorical columns available for univariate analysis.")
+
+    with tab2:
+        st.subheader("Relationship Between Two Variables")
+
+    with tab3:
+        st.subheader("Exploring Relationships Among Multiple Variables")
+
 
 def main():
     """Main function to run the Streamlit application."""
@@ -294,6 +323,7 @@ def main():
         st.session_state.df = df.copy()  # Store the original DataFrame
         st.markdown("---")
         display_data_preview(st.session_state.df)
+        st.markdown("---")
         st.markdown("---")
         display_data_info(st.session_state.df)
         st.markdown("---")
